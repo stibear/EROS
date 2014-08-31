@@ -24,18 +24,20 @@
   (define (instance-of? obj class)
     ((class-membership class) obj))
 
-  (define method-sym 'methods)
+  (define (make-generic)
+    (define (generic . args)
+      (let ((method-alst
+             (dictionary-ref (attribute generic) 'methods)))
+        (if method-alst
+            (apply (find-method args method-alst) args)
+            (error "No methods found"))))
+    generic)
 
   (define-syntax define-generic
     (ir-macro-transformer
      (lambda (form inject compare)
        (let ((generic-name (cadr form)))
-         `(define (,generic-name . args)
-            (let ((method-alst
-                   (dictionary-ref (attribute ,generic-name) method-sym)))
-              (if method-alst
-                  (apply (find-method args method-alst) args)
-                  (error "No methods found"))))))))
+         `(define ,generic-name (make-generic))))))
   
   (define (add-method generic-fn arg-type-list closure)
     (dictionary-set!
