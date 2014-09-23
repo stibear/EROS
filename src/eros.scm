@@ -3,7 +3,6 @@
           (scheme write)
           (srfi 1)
           (srfi 8)
-          (picrin macro)
           (picrin attribute)
           (picrin dictionary))
 
@@ -11,15 +10,6 @@
     (make-class membership)
     class?
     (membership class-membership))
-
-  (define-syntax define-class
-    (syntax-rules ()
-      ((_ class-name membership)
-       (define class-name
-         (make-class membership)))))
-
-  (define-class <value> (lambda (obj) #t))
-  (define-class <class> class?)
 
   (define (instance-of? obj class)
     ((class-membership class) obj))
@@ -33,12 +23,6 @@
             (error "No methods found"))))
     generic)
 
-  (define-syntax define-generic
-    (ir-macro-transformer
-     (lambda (form inject compare)
-       (let ((generic-name (cadr form)))
-         `(define ,generic-name (make-generic))))))
-  
   (define (add-method generic-fn arg-type-list closure)
     (dictionary-set!
      (attribute generic-fn) 'methods
@@ -59,17 +43,6 @@
        (if (pair? x) (car x) x))
      lst))
 
-  (define-syntax define-method
-    (ir-macro-transformer
-     (lambda (form rename compare)
-       (let ((method-name (caadr form))
-             (args (cdadr form))
-             (body (cddr form)))
-         `(add-method ,method-name
-                      (list ,@(method-args-types args))
-                      (lambda ,(method-args-params args)
-                        ,@body))))))
-  
   (define (find-method args method-lst)
     (let ((method
            (member
@@ -81,6 +54,28 @@
           (cdar method)
           (error "No methods found"))))
 
+  (define-syntax define-class
+    (syntax-rules ()
+      ((_ class-name membership)
+       (define class-name
+         (make-class membership)))))
+
+  (define-syntax define-generic
+    (syntax-rules ()
+      ((_ generic-name)
+       (define generic-name
+         (make-generic)))))
+
+  (define-syntax define-method
+    (syntax-rules ()
+      ((_ (method-name arg ...) body ...)
+       (add-method method-name
+         (method-args-types arg ...)
+         (lambda (method-arg-params arg ...)
+           body ...)))))
+
+  (define-class <value> (lambda (obj) #t))
+  (define-class <class> class?)
   (define-class <number> number?)
   (define-class <string> string?)
   (define-class <procedure> procedure?)
@@ -92,7 +87,7 @@
   (define-class <bytevector> bytevector?)
   (define-class <eof-object> eof-object?)
   (define-class <port> port?)
-  
+
   (define-generic class-of)
   (define-method (class-of obj)
     <value>)
