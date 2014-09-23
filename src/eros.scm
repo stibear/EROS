@@ -18,9 +18,6 @@
        (define class-name
          (make-class membership)))))
 
-  (define-class <value> (lambda (obj) #t))
-  (define-class <class> class?)
-
   (define (instance-of? obj class)
     ((class-membership class) obj))
 
@@ -81,6 +78,8 @@
           (cdar method)
           (error "No methods found"))))
 
+  (define-class <value> (lambda (obj) #t))
+  (define-class <class> class?)
   (define-class <number> number?)
   (define-class <string> string?)
   (define-class <procedure> procedure?)
