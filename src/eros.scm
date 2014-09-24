@@ -3,7 +3,7 @@
           (scheme write)
           (srfi 1)
           (srfi 8)
-          (picrin attribute)
+          (picrin base)
           (picrin dictionary))
 
   (define-record-type class
