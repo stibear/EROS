@@ -67,12 +67,15 @@
          (make-generic)))))
 
   (define-syntax define-method
-    (syntax-rules ()
-      ((_ (method-name arg ...) body ...)
-       (add-method method-name
-         (method-args-types arg ...)
-         (lambda (method-arg-params arg ...)
-           body ...)))))
+    (ir-macro-transformer
+     (lambda (form compare inject)
+       (let ((method-name (caadr form))
+             (args (cdadr form))
+             (body (cddr form)))
+         `(add-method ,method-name
+                      (list ,@(method-args-types args))
+                      (lambda ,(method-args-params args)
+                        ,@body))))))
 
   (define-class <value> (lambda (obj) #t))
   (define-class <class> class?)
