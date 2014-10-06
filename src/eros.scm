@@ -14,6 +14,17 @@
   (define (instance-of? obj class)
     ((class-membership class) obj))
 
+  (define (find-method args method-lst)
+    (let ((method
+           (member
+            args method-lst
+            (lambda (x y)
+              (every values
+                     (map instance-of? x (car y)))))))
+      (if method
+          (cdar method)
+          (error "No methods found"))))
+
   (define (make-generic)
     (define (generic . args)
       (let ((method-alst
@@ -31,28 +42,6 @@
                                  'methods)))
           (if x x '())))))
 
-  (define (method-args-types lst)
-    (map
-     (lambda (x)
-       (if (pair? x) (cadr x) <value>))
-     lst))
-
-  (define (method-args-params lst)
-    (map
-     (lambda (x)
-       (if (pair? x) (car x) x))
-     lst))
-
-  (define (find-method args method-lst)
-    (let ((method
-           (member
-            args method-lst
-            (lambda (x y)
-              (every values
-                     (map instance-of? x (car y)))))))
-      (if method
-          (cdar method)
-          (error "No methods found"))))
 
   (define-syntax define-class
     (syntax-rules ()
@@ -66,16 +55,22 @@
        (define generic-name
          (make-generic)))))
 
+  (define-syntax separate-method-args
+    (syntax-rules ()
+      ((_ ((n t) arg ...) (name ...) (type ...)  k)
+       (separate-method-args (arg ...) (name ... n) (type ... t) k))
+      ((_ (n arg ...) (name ...) (type ...) k)
+       (separate-method-args (arg ...) (name ... n) (type ... <value>) k))
+      ((_ () (name ...) (type ...) (method-name body ...))
+       (add-method method-name
+                   (list type ...)
+                   (lambda (name ...)
+                     body ...)))))
+
   (define-syntax define-method
-    (ir-macro-transformer
-     (lambda (form compare inject)
-       (let ((method-name (caadr form))
-             (args (cdadr form))
-             (body (cddr form)))
-         `(add-method ,method-name
-                      (list ,@(method-args-types args))
-                      (lambda ,(method-args-params args)
-                        ,@body))))))
+    (syntax-rules ()
+      ((_ (method-name arg ...) body ...)
+       (separate-method-args (arg ...) () () (method-name body ...)))))
 
   (define-class <value> (lambda (obj) #t))
   (define-class <class> class?)
@@ -84,8 +79,8 @@
   (define-class <procedure> procedure?)
   (define-class <boolean> boolean?)
   (define-class <char> char?)
-  (define-class <null> null?) ; needless?
-  (define-class <pair> pair?) ; should be replaced by list??
+  (define-class <null> null?)
+  (define-class <pair> pair?)
   (define-class <symbol> symbol?)
   (define-class <bytevector> bytevector?)
   (define-class <eof-object> eof-object?)
