@@ -48,17 +48,6 @@
       (if (null? applicable-methods)
           (error "No applicable methods found")
           (map cdr (preceding-sort applicable-methods)))))
-  #;
-  (define (find-method args method-lst)
-    (let ((method
-           (member
-            args method-lst
-            (lambda (x y)
-              (every values
-                     (map instance-of? x (car y)))))))
-      (if method
-          (cdar method)
-          (error "No methods found"))))
 
   (define (make-generic)
     (define (generic . args)
@@ -121,15 +110,16 @@
   (define-syntax inject-call-next-method
     (syntax-rules ()
       ((_ method-name names types bodies)
-       (let-syntax ((cont
-                     (syntax-rules ()
-                       ((_ call-next-method bodies)
-                        (add-method method-name
-                                    (list . types)
-                                    (lambda names
-                                      (shift
-                                       (lambda call-next-method
-                                         . bodies))))))))
+       (let-syntax
+           ((cont
+             (syntax-rules ()
+               ((_ (symb) bodies)
+                (add-method method-name
+                            (list . types)
+                            (lambda names
+                              (shift
+                               (lambda (symb)
+                                 . bodies))))))))
          (extract call-next-method bodies
                   (cont () bodies))))))
 
