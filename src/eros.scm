@@ -6,18 +6,25 @@
           (srfi 95)
           (picrin base)
           (picrin dictionary)
-          (picrin control))
+          (picrin control)
+          (picrin macro))
+
+  (define (dprint x)
+    (display x)
+    (newline)
+    x)
 
   (define-record-type class
-    (make-class membership relation-list)
+    (make-class membership relation)
     class?
     (membership class-membership)
-    (relation-list class-relation-list set-class-relation-list!))
+    (relation class-relation set-class-relation!))
 
   (define (add-relation! subclass superclass)
-    (set-class-relation-list!
-     subclass
-     (cons superclass (class-relation-list subclass))))
+    (if (not (member superclass (class-relation subclass)))
+        (set-class-relation!
+         subclass
+         (cons superclass (class-relation subclass)))))
 
   (define (instance-of? obj class)
     ((class-membership class) obj))
@@ -26,7 +33,7 @@
     (delete-duplicates
      (cons class
            (append-map collect-superclasses
-                       (class-relation-list class)))))
+                       (class-relation class)))))
 
   (define (class-inclusive? class1 class2)
     (if (member class1 (cdr (collect-superclasses class2))) #t #f))
@@ -38,13 +45,13 @@
       (lambda (x y)
         (any class-inclusive? (car x) (car y))))))
 
-  (define (find-method args method-lst)
+  (define (find-method args method-alst)
     (let ((applicable-methods
            (filter
             (lambda (x)
               (every values
                      (map instance-of? args (car x))))
-            method-lst)))
+            method-alst)))
       (if (null? applicable-methods)
           (error "No applicable methods found")
           (map cdr (preceding-sort applicable-methods)))))
@@ -52,22 +59,24 @@
   (define (make-generic)
     (define (generic . args)
       (let ((method-alst
-             (dictionary-ref (attribute generic) 'methods)))
+             (dictionary->alist
+              (dictionary-ref (attribute generic) '@@method))))
         (if method-alst
             (reset
              (lambda ()
                (let loop ((methods (find-method args method-alst)) (args args))
                  (if (null? methods) (error "No next methods fonud")
-                     (loop (cdr methods) (apply (car methods) args))))))
+                     (loop (cdr methods)
+                           (receive lst (apply (car methods) args) lst))))))
             (error "No methods found"))))
+    (dictionary-set! (attribute generic) '@@method (dictionary))
     generic)
 
-  (define (add-method generic-fn arg-type-list closure)
+  (define (add-method! generic-fn arg-type-list closure)
     (dictionary-set!
-     (attribute generic-fn) 'methods
-     `((,arg-type-list . ,closure) .
-       ,(let ((x (dictionary-ref (attribute generic-fn) 'methods)))
-          (if x x '())))))
+     (dprint (dictionary-ref (attribute generic-fn) '@@method))
+     arg-type-list
+     closure))
 
   (define-syntax define-class
     (syntax-rules ()
@@ -86,42 +95,23 @@
        (define generic-name
          (make-generic)))))
 
-  (define-syntax extract?
-    (syntax-rules ()
-      ((_ symb body _cont-t _cont-f)
-       (letrec-syntax
-           ((tr
-             (syntax-rules (symb)
-               ((_ x symb tail (cont-head symb-l . cont-args) cont-false)
-                (cont-head (x . symb-l) . cont-args))
-               ((_ d (x . y) tail . reset)
-                (tr x x (y . tail) . reset))
-               ((_ d1 d2 () cont-t (cont-head symb-l . cont-args))
-                (cont-head (symb . symb-l) . cont-args))
-               ((_ d1 d2 (x . y) . reset)
-                (tr x x y . reset)))))
-         (tr body body () _cont-t _cont-f)))))
-
-  (define-syntax extract
-    (syntax-rules ()
-      ((_ symb body cont)
-       (extract? symb body cont cont))))
-
   (define-syntax inject-call-next-method
-    (syntax-rules ()
-      ((_ method-name names types bodies)
-       (let-syntax
-           ((cont
-             (syntax-rules ()
-               ((_ (symb) bodies)
-                (add-method method-name
-                            (list . types)
-                            (lambda names
-                              (shift
-                               (lambda (symb)
-                                 . bodies))))))))
-         (extract call-next-method bodies
-                  (cont () bodies))))))
+    (er-macro-transformer
+     (lambda (form rename compare)
+       (let ((mname (second form))
+             (names (third form))
+             (types (fourth form))
+             (body (fifth form))
+             (%add-method! (rename 'add-method!))
+             (%list (rename 'list))
+             (%lambda (rename 'lambda))
+             (%shift (rename 'shift)))
+         `(,%add-method! ,mname
+                        (,%list ,@types)
+                        (,%lambda ,names
+                          (,%shift
+                           (,%lambda (call-next-method)
+                             ,@body))))))))
 
   (define-syntax separate-method-args
     (syntax-rules ()
@@ -130,7 +120,8 @@
       ((_ (n arg ...) (name ...) (type ...) k)
        (separate-method-args (arg ...) (name ... n) (type ... <value>) k))
       ((_ () (name ...) (type ...) (method-name body ...))
-       (inject-call-next-method method-name (name ...) (type ...) (body ...)))))
+       (inject-call-next-method
+        method-name (name ...) (type ...) (body ...)))))
 
   (define-syntax define-method
     (syntax-rules ()

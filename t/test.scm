@@ -3,7 +3,7 @@
           (scheme base)
           (picrin test))
 
-  (load "src/eros.scm")
+  (load "/home/stibear/src/EROS/src/eros.scm")
   (import (eros))
 
   (test-begin "EROS")
@@ -23,9 +23,9 @@
 
   (test-end)
 
-  (define foo (kons 1 2))
-
   (test-begin "define-generic & define-method")
+
+  (define foo (kons 1 2))
 
   (define-generic bar)
   (define-method (bar obj)
@@ -33,10 +33,37 @@
 
   (test foo (bar foo))
 
-  (define-method (bar (pr <pare>))
-    (list (kar pr) (kdr pr)))
+  (test-end)
 
-  (test '(1 2) (bar foo))
+  (test-begin "define-relation & call-next-method")
+  
+  (define-class <integer> integer?)
+
+  (define-relation <integer> <number>)
+
+  (define-generic hoge)
+
+  (define-method (hoge (n <number>))
+    'number)
+  (test 'number (hoge 10))
+  
+  (define-method (hoge (n <integer>))
+    (call-next-method n))
+  (test 'number (hoge 10))
+
+  (test-end)
+
+  (test-begin "redefinition of method")
+
+  (define-generic hoge)
+
+  (define-method (hoge n)
+    n)
+
+  (define-method (hoge n)
+    (+ n 1))
+
+  (test 11 (hoge 10))
 
   (test-end)
 
